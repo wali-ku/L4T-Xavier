@@ -1276,6 +1276,7 @@ extern const u32 sched_prio_to_wmult[40];
 #define ENQUEUE_WAKEUP_NEW	0x40
 
 #define RETRY_TASK		((void *)-1UL)
+#define BLOCK_TASK		((void *)-2UL)
 
 struct sched_class {
 	const struct sched_class *next;
@@ -1427,6 +1428,10 @@ extern void init_sched_fair_class(void);
 
 extern void resched_curr(struct rq *rq);
 extern void resched_cpu(int cpu);
+
+#ifdef CONFIG_SCHED_RTGANG
+extern void resched_cpu_force(int cpu, struct task_struct *curr);
+#endif
 
 extern struct rt_bandwidth def_rt_bandwidth;
 extern void init_rt_bandwidth(struct rt_bandwidth *rt_b, u64 period, u64 runtime);

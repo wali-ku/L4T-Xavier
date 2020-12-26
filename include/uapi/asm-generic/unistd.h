@@ -665,6 +665,14 @@ __SC_COMP(__NR_recvmmsg, sys_recvmmsg, compat_sys_recvmmsg)
  */
 #define __NR_arch_specific_syscall 244
 
+#ifdef CONFIG_SCHED_RTGANG
+#define __NR_rtg_set_params 245
+__SYSCALL(__NR_rtg_set_params, sys_rtg_set_params)
+
+#define __NR_npplock 246
+__SYSCALL(__NR_npplock, sys_npplock)
+#endif
+
 #define __NR_wait4 260
 __SC_COMP(__NR_wait4, sys_wait4, compat_sys_wait4)
 #define __NR_prlimit64 261

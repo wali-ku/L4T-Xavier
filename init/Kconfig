@@ -1389,6 +1389,23 @@ config DEFAULT_USE_ENERGY_AWARE
 
 	  Say N if unsure.
 
+config SCHED_RTGANG
+	bool "Include RT_GANG_LOCK in scheduling features"
+	help
+	  This option introduces the RT-Gang scheduling feature. Under RT-Gang,
+	  only one (parallel) real-time task is allowed to execute on all
+	  system cores at any given time. This resolves the problem of shared
+	  resource contention among different real-time tasks and guarantees
+	  complete performance isolation to the highest priority real-time
+	  task.
+
+config SCHED_THROTTLE
+	bool "Enable best-effor task throttling support inside scheduler"
+	help
+	  This option integrates a kernel level task throttling framework into
+	  the scheduler. This framework can be used to limit the interference
+	  from best-effort tasks to real-time tasks.
+
 config SYSFS_DEPRECATED
 	bool "Enable deprecated sysfs features to support old userspace tools"
 	depends on SYSFS

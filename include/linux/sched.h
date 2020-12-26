@@ -126,6 +126,16 @@ struct sched_attr {
 	u64 sched_period;
 };
 
+#ifdef CONFIG_SCHED_RTGANG
+struct rtg_resource_info {
+	int gid;
+	int budget;
+	long unsigned bins;
+};
+
+#define GET_RTG_INFO(task)	(&task->rtg_info)
+#endif
+
 struct futex_pi_state;
 struct robust_list_head;
 struct bio_list;
@@ -1679,6 +1689,10 @@ struct task_struct {
 	struct task_group *sched_task_group;
 #endif
 	struct sched_dl_entity dl;
+
+#ifdef CONFIG_SCHED_RTGANG
+	struct rtg_resource_info rtg_info;
+#endif
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
 	/* list of struct preempt_notifier: */

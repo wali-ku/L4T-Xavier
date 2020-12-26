@@ -94,6 +94,10 @@
 #include <trace/events/sched.h>
 #include "walt.h"
 
+#ifdef CONFIG_SCHED_RTGANG
+#include "rtgang.h"
+#endif
+
 DEFINE_MUTEX(sched_domains_mutex);
 DEFINE_PER_CPU_SHARED_ALIGNED(struct rq, runqueues);
 
@@ -527,6 +531,29 @@ void resched_cpu(int cpu)
 		resched_curr(rq);
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
+
+#ifdef CONFIG_SCHED_RTGANG
+/*
+ * The purpose of this function is to force rescheduling of a target cpu under
+ * all circumstances. For this reason, this function does not acquire the
+ * target CPU's rq lock and sends a rescheduling interrupt without protection
+ * if need be. It is used exclusively in RT-Gang related code.
+ */
+void resched_cpu_force (int cpu, struct task_struct *curr)
+{
+	if (curr == NULL)
+		curr = cpu_rq(cpu)->curr;
+
+	if (set_nr_and_not_polling(curr))
+		smp_send_reschedule(cpu);
+	else {
+		rtg_trace_printk(RTG_LEVEL_CRITICAL, "[WARN] Resched IPI NOT "
+				"sent to cpu=%d. THIS MIGHT BE A BUG!!!\n",
+				cpu);
+		trace_sched_wake_idle_without_ipi(cpu);
+	}
+}
+#endif
 
 #ifdef CONFIG_SMP
 #ifdef CONFIG_NO_HZ_COMMON
@@ -3373,6 +3400,7 @@ static inline struct task_struct *
 pick_next_task(struct rq *rq, struct task_struct *prev, struct pin_cookie cookie)
 {
 	const struct sched_class *class = &fair_sched_class;
+	bool skip_retry_flag = false;
 	struct task_struct *p;
 
 	/*
@@ -3396,9 +3424,16 @@ again:
 	for_each_class(class) {
 		p = class->pick_next_task(rq, prev, cookie);
 		if (p) {
-			if (unlikely(p == RETRY_TASK))
+			if (p == BLOCK_TASK) {
+				skip_retry_flag = true;
+				continue;
+			}
+
+			if (p != RETRY_TASK)
+				return p;
+
+			if (!skip_retry_flag && p == RETRY_TASK)
 				goto again;
-			return p;
 		}
 	}
 
@@ -4588,6 +4623,39 @@ err_size:
 	put_user(sizeof(*attr), &uattr->size);
 	return -E2BIG;
 }
+
+#ifdef CONFIG_SCHED_RTGANG
+/*
+ * sys_rtg_set_params - Update task parameters for RT-Gang
+ *
+ * @pid	 : pid of the target process.
+ * @info : Resource requirement information of the target process
+ *
+ * Return: Zero on success. An error code otherwise.
+ */
+SYSCALL_DEFINE2(rtg_set_params, pid_t, pid,
+		struct rtg_resource_info* __user, info)
+{
+	struct task_struct *p;
+
+	/* Obtain the task structure associated with the process
+	   referenced by pid */
+	if (pid == 0 || current->pid == pid)
+		p = current;
+	else
+		p = find_process_by_pid (pid);
+
+	/* Process does not exist or it is not a real-time process */
+	if (!p || !(IS_RTC(p) || IS_EDF(p)))
+		return -EINVAL;
+
+	if (copy_from_user(GET_RTG_INFO(p), info,
+				sizeof(struct rtg_resource_info)))
+		return -EFAULT;
+
+	return 0;
+}
+#endif
 
 /**
  * sys_sched_setscheduler - set/change the scheduler policy and RT priority

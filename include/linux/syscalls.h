@@ -903,4 +903,10 @@ asmlinkage long sys_pkey_mprotect(unsigned long start, size_t len,
 asmlinkage long sys_pkey_alloc(unsigned long flags, unsigned long init_val);
 asmlinkage long sys_pkey_free(int pkey);
 
+#ifdef CONFIG_SCHED_RTGANG
+asmlinkage long sys_npplock(int lock);
+asmlinkage long sys_rtg_set_params(pid_t pid,
+			struct rtg_resource_info __user *info);
+#endif
+
 #endif

@@ -4,6 +4,7 @@
  */
 
 #include "sched.h"
+#include "rtgang.h"
 
 #include <linux/slab.h>
 #include <linux/irq_work.h>
@@ -1550,7 +1551,7 @@ static struct sched_rt_entity *pick_next_rt_entity(struct rq *rq,
 	return next;
 }
 
-static struct task_struct *_pick_next_task_rt(struct rq *rq)
+static struct task_struct *__peek_next_task_rt(struct rq *rq)
 {
 	struct sched_rt_entity *rt_se;
 	struct task_struct *p;
@@ -1563,7 +1564,6 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 	} while (rt_rq);
 
 	p = rt_task_of(rt_se);
-	p->se.exec_start = rq_clock_task(rq);
 
 	return p;
 }
@@ -1571,6 +1571,7 @@ static struct task_struct *_pick_next_task_rt(struct rq *rq)
 static struct task_struct *
 pick_next_task_rt(struct rq *rq, struct task_struct *prev, struct pin_cookie cookie)
 {
+	int ret;
 	struct task_struct *p;
 	struct rt_rq *rt_rq = &rq->rt;
 
@@ -1598,19 +1599,47 @@ pick_next_task_rt(struct rq *rq, struct task_struct *prev, struct pin_cookie coo
 	 * We may dequeue prev's rt_rq in put_prev_task().
 	 * So, we update time before rt_nr_running check.
 	 */
-	if (prev->sched_class == &rt_sched_class)
+	if (prev->sched_class == &rt_sched_class) {
 		update_curr_rt(rq);
+
+#ifdef CONFIG_SCHED_RTGANG
+		if (sched_feat(RT_GANG_LOCK))
+			rtg_try_release_lock(prev);
+#endif
+	}
 
 	if (!rt_rq->rt_queued)
 		return NULL;
 
-	put_prev_task(rq, prev);
+	p = __peek_next_task_rt(rq);
 
-	p = _pick_next_task_rt(rq);
+#ifdef CONFIG_SCHED_RTGANG
+	if (sched_feat(RT_GANG_LOCK) && RTG_FIFO_CHECK(p)) {
+		ret = rtg_try_acquire_lock(p, prev);
+
+		if (ret == RTG_BLOCK || (ret == RTG_NPP_BLOCK &&
+					prev->sched_class != &rt_sched_class))
+			return BLOCK_TASK;
+
+		if (ret == RTG_NPP_BLOCK &&
+				prev->sched_class == &rt_sched_class) {
+			/*
+			 * The 'next' task cannot preempt the 'prev' task
+			 * because of the NPP lock. Since the 'prev' task
+			 * belongs to the RT sched class, we must return it
+			 * back to the scheduler so that it may continue
+			 * execution.
+			 */
+			p = prev;
+		}
+	}
+#endif
+
+	put_prev_task(rq, prev);
+	p->se.exec_start = rq_clock_task(rq);
 
 	/* The running task is never eligible for pushing */
 	dequeue_pushable_task(rq, p);
-
 	queue_push_tasks(rq);
 
 	return p;

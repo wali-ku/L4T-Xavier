@@ -5,6 +5,16 @@
  */
 SCHED_FEAT(GENTLE_FAIR_SLEEPERS, true)
 
+#ifdef CONFIG_SCHED_RTGANG
+/*
+ * Enable real-time gang scheduling framework (RT-Gang). RT-Gang allows
+ * execution of a single (multi-threaded) real-time task (i.e., gang) at any
+ * giving time across all system cores.
+ * NOTE: This feature is disabled by default.
+ */
+SCHED_FEAT(RT_GANG_LOCK, false)
+#endif
+
 /*
  * Place new tasks ahead so that they do not starve already running
  * tasks
